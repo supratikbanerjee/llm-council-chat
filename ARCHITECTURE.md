@@ -20,7 +20,7 @@ Configuration is code‑first with environment overrides:
 - `OPENROUTER_API_URL` (default: `https://openrouter.ai/api/v1/chat/completions`)
 - `COUNCIL_MODELS`, `CHAIRMAN_MODEL`
   - **Current defaults** in `backend/config.py`:
-    - Council: `qwen/qwen3-14b`, `mistralai/ministral-14b-2512`, `upstage/solar-pro-3:free`, `google/gemma-3-27b-it`
+    - Council: `qwen/qwen3-14b`, `nvidia/nemotron-nano-9b-v2`, `upstage/solar-pro-3:free`, `google/gemma-3-27b-it`
     - Chairman: `nvidia/nemotron-3-nano-30b-a3b:free`
 - **Context controls:**
   - `CONTEXT_TOKEN_LIMIT` (default 16000)

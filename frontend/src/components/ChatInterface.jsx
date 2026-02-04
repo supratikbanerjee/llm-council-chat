@@ -147,6 +147,8 @@ const MessagesView = memo(function MessagesView({
                 {msg.context_debug && (
                   <div className="context-debug">
                     Context: {msg.context_debug.total_tokens_after ?? '?'} / {msg.context_debug.budget ?? '?'} tokens |{' '}
+                    verbatim {msg.context_debug.used_history_messages ?? 0} msg(s){' '}
+                    ({formatIndexList(msg.context_debug.included_indices)}) |{' '}
                     summarized {msg.context_debug.summarized_message_count ?? 0} msg(s){' '}
                     ({formatIndexList(msg.context_debug.summarized_indices)}) | dropped{' '}
                     {msg.context_debug.dropped_message_count ?? 0} msg(s) ({formatIndexList(msg.context_debug.dropped_indices)})

@@ -66,7 +66,7 @@ Edit `backend/config.py`:
 ```python
 COUNCIL_MODELS = [
     "qwen/qwen3-14b",
-    "mistralai/ministral-14b-2512",
+    "nvidia/nemotron-nano-9b-v2",
     "upstage/solar-pro-3:free",
     "google/gemma-3-27b-it",
 ]

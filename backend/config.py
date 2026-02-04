@@ -14,8 +14,8 @@ CONTEXT_TOKEN_SAFETY_MARGIN = int(os.getenv("CONTEXT_TOKEN_SAFETY_MARGIN", "256"
 
 # Council members - list of OpenRouter model identifiers
 COUNCIL_MODELS = [
+    "nvidia/nemotron-nano-9b-v2",
     "qwen/qwen3-14b",
-    "mistralai/ministral-14b-2512",
     "upstage/solar-pro-3:free",
     "google/gemma-3-27b-it"
 ]
