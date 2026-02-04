@@ -1,87 +1,144 @@
-# LLM Council
+# LLM Council Chat
 
-![llmcouncil](header.jpg)
+> Disclaimer: This project is a **derived work** of Andrej Karpathy’s original LLM Council repository.
 
-The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, eg.c), you can group them into your "LLM Council". This repo is a simple, local web app that essentially looks like ChatGPT except it uses OpenRouter to send your query to multiple LLMs, it then asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
+LLM Council Chat is a local web app that routes your prompt to multiple LLMs, has them review each other’s answers, and produces a final synthesized response. This repo is for internal use only and will be updated whenever the owner deems it necessary. The current model configuration is the best optimized version so far in terms of output quality and cost.
 
-In a bit more detail, here is what happens when you submit a query:
+## What It Does (3‑Stage Pipeline)
 
-1. **Stage 1: First opinions**. The user query is given to all LLMs individually, and the responses are collected. The individual responses are shown in a "tab view", so that the user can inspect them all one by one.
-2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
-3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
+1. **Stage 1 — Individual responses:** Each model answers independently.
+2. **Stage 2 — Peer review:** Models rank anonymized answers.
+3. **Stage 3 — Chairman synthesis:** A designated model produces the final answer.
 
-## Vibe Code Alert
+The UI shows all stages, with collapsible panels and per‑stage tabs.
 
-This project was 99% vibe coded as a fun Saturday hack because I wanted to explore and evaluate a number of LLMs side by side in the process of [reading books together with LLMs](https://x.com/karpathy/status/1990577951671509438). It's nice and useful to see multiple responses side by side, and also the cross-opinions of all LLMs on each other's outputs. I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like.
+---
+
+## Highlights (LLM Council Chat Enhancements)
+
+- **Token‑aware context window** using `tiktoken` (default 16k, configurable).
+- **Conversation memory** with summarization of older turns.
+- **Streaming responses** with stage‑by‑stage updates.
+- **Resend last prompt** without duplicating messages.
+- **Rename & delete conversations** from the sidebar.
+- **Markdown + math rendering** (GFM tables + KaTeX), with normalization of malformed math.
+- **Collapsible user prompts** (long prompts folded by default).
+- **Failure badges** for stages and prompts when an error occurs.
+- **Turn cards** that group each user prompt with its full multi‑stage response.
+- **Context debug line** showing token budget usage and what got summarized/pruned.
+
+---
+
+## Requirements
+
+- Python 3.10+
+- Node.js + npm
+- `uv` (Python package manager)
+
+---
 
 ## Setup
 
-### 1. Install Dependencies
+### 1) Install Dependencies
 
-The project uses [uv](https://docs.astral.sh/uv/) for project management.
-
-**Backend:**
+Backend:
 ```bash
 uv sync
 ```
 
-**Frontend:**
+Frontend:
 ```bash
 cd frontend
 npm install
 cd ..
 ```
 
-### 2. Configure API Key
+### 2) Configure API Key
 
-Create a `.env` file in the project root:
-
+Create a `.env` in repo root:
 ```bash
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-Get your API key at [openrouter.ai](https://openrouter.ai/). Make sure to purchase the credits you need, or sign up for automatic top up.
+### 3) Configure Models (Optional)
 
-### 3. Configure Models (Optional)
-
-Edit `backend/config.py` to customize the council:
-
+Edit `backend/config.py`:
 ```python
 COUNCIL_MODELS = [
-    "openai/gpt-5.1",
-    "google/gemini-3-pro-preview",
-    "anthropic/claude-sonnet-4.5",
-    "x-ai/grok-4",
+    "qwen/qwen3-14b",
+    "mistralai/ministral-14b-2512",
+    "upstage/solar-pro-3:free",
+    "google/gemma-3-27b-it",
 ]
 
-CHAIRMAN_MODEL = "google/gemini-3-pro-preview"
+CHAIRMAN_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
 ```
 
-## Running the Application
+---
 
-**Option 1: Use the start script**
+## Running
+
+**Option A: Start script**
 ```bash
 ./start.sh
 ```
 
-**Option 2: Run manually**
+**Option B: Manual**
 
-Terminal 1 (Backend):
+Terminal 1 (backend):
 ```bash
 uv run python -m backend.main
 ```
 
-Terminal 2 (Frontend):
+Terminal 2 (frontend):
 ```bash
 cd frontend
 npm run dev
 ```
 
-Then open http://localhost:5173 in your browser.
+Open http://localhost:5173
+
+---
+
+## Key Config Knobs
+
+In `backend/config.py`:
+
+- `CONTEXT_TOKEN_LIMIT` (default 16000)
+- `CONTEXT_TOKEN_SAFETY_MARGIN` (default 256)
+- `SUMMARY_MODEL` (default = `CHAIRMAN_MODEL`)
+
+These can also be set via environment variables.
+
+---
+
+## Storage
+
+Conversation JSON is stored in:
+```
+data/conversations/
+```
+
+Each conversation contains user and assistant messages plus stage outputs.
+
+---
 
 ## Tech Stack
 
-- **Backend:** FastAPI (Python 3.10+), async httpx, OpenRouter API
-- **Frontend:** React + Vite, react-markdown for rendering
-- **Storage:** JSON files in `data/conversations/`
-- **Package Management:** uv for Python, npm for JavaScript
+- **Backend:** FastAPI, httpx, OpenRouter API, tiktoken
+- **Frontend:** React + Vite, react-markdown, remark-gfm, remark-math, rehype-katex
+- **Storage:** JSON files
+- **Package Management:** uv (Python), npm (JS)
+
+---
+
+## Notes
+
+- This is a local tool; run it on your machine.
+- Free models may rate‑limit or error; swap models in `config.py` if needed.
+
+---
+
+## Architecture Details
+
+See `ARCHITECTURE.md` for a detailed breakdown of backend + frontend flow, context handling, and streaming behavior.

@@ -11,7 +11,7 @@ import asyncio
 
 from . import storage
 from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
-from .context import build_context_messages
+from .context_debug import build_context_messages_with_debug
 
 app = FastAPI(title="LLM Council API")
 
@@ -151,19 +151,23 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         current_query = request.content
 
     # Build context from prior turns; current user message is passed separately
-    messages = await build_context_messages(
+    messages, context_debug = await build_context_messages_with_debug(
         conversation["messages"][:-1],
-        current_query
+        current_query,
     )
 
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
+    metadata = metadata or {}
+    metadata["context_debug"] = context_debug
 
     # Add assistant message with all stages
     storage.add_assistant_message(
         conversation_id,
         stage1_results,
         stage2_results,
-        stage3_result
+        stage3_result,
+        metadata=metadata,
+        context_debug=context_debug,
     )
 
     # Return the complete response with metadata
@@ -217,10 +221,13 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
                 current_query = request.content
 
-            messages = await build_context_messages(
+            messages, context_debug = await build_context_messages_with_debug(
                 conversation["messages"][:-1],
-                current_query
+                current_query,
             )
+
+            # Emit context debugging info once per request (useful for UI).
+            yield f"data: {json.dumps({'type': 'context_debug', 'data': context_debug})}\n\n"
 
             # Stage 1: Collect responses
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
@@ -231,7 +238,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
             stage2_results, label_to_model = await stage2_collect_rankings(current_query, stage1_results)
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
+            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'context_debug': context_debug}})}\n\n"
 
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
@@ -249,7 +256,9 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 conversation_id,
                 stage1_results,
                 stage2_results,
-                stage3_result
+                stage3_result,
+                metadata={'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings, 'context_debug': context_debug},
+                context_debug=context_debug,
             )
 
             # Send completion event

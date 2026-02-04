@@ -119,6 +119,7 @@ function App() {
         stage2: null,
         stage3: null,
         metadata: null,
+        context_debug: null,
         failed: false,
         failedStages: {
           stage1: false,
@@ -147,6 +148,17 @@ function App() {
       // Send message with streaming
       await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
         switch (eventType) {
+          case 'context_debug':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant') {
+                lastMsg.context_debug = event.data;
+              }
+              return { ...prev, messages };
+            });
+            break;
+
           case 'stage1_start':
             setCurrentConversation((prev) => {
               const messages = prev.messages.map((msg, idx) => {
@@ -196,6 +208,7 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage2 = event.data;
               lastMsg.metadata = event.metadata;
+              lastMsg.context_debug = event.metadata?.context_debug ?? lastMsg.context_debug;
               lastMsg.loading.stage2 = false;
               lastMsg.failedStages.stage2 = false;
               return { ...prev, messages };
@@ -306,6 +319,7 @@ function App() {
         stage2: null,
         stage3: null,
         metadata: null,
+        context_debug: null,
         failed: false,
         failedStages: {
           stage1: false,
@@ -329,6 +343,16 @@ function App() {
         userMsg.content,
         (eventType, event) => {
           switch (eventType) {
+            case 'context_debug':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                if (lastMsg && lastMsg.role === 'assistant') {
+                  lastMsg.context_debug = event.data;
+                }
+                return { ...prev, messages: msgs };
+              });
+              break;
             case 'stage1_start':
               setCurrentConversation((prev) => {
                 const msgs = [...prev.messages];
@@ -362,6 +386,7 @@ function App() {
                 const lastMsg = msgs[msgs.length - 1];
                 lastMsg.stage2 = event.data;
                 lastMsg.metadata = event.metadata;
+                lastMsg.context_debug = event.metadata?.context_debug ?? lastMsg.context_debug;
                 lastMsg.loading.stage2 = false;
                 return { ...prev, messages: msgs };
               });
