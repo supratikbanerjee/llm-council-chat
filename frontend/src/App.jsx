@@ -53,6 +53,37 @@ function App() {
     }
   };
 
+  const handleRenameConversation = async (conv) => {
+    const nextTitle = window.prompt('Rename conversation', conv.title || '');
+    if (nextTitle === null) return;
+    const trimmed = nextTitle.trim();
+    if (!trimmed) return;
+    try {
+      await api.updateConversationTitle(conv.id, trimmed);
+      await loadConversations();
+      if (conv.id === currentConversationId) {
+        await loadConversation(conv.id);
+      }
+    } catch (error) {
+      console.error('Failed to rename conversation:', error);
+    }
+  };
+
+  const handleDeleteConversation = async (conv) => {
+    const confirmed = window.confirm(`Delete "${conv.title || 'New Conversation'}"? This cannot be undone.`);
+    if (!confirmed) return;
+    try {
+      await api.deleteConversation(conv.id);
+      await loadConversations();
+      if (conv.id === currentConversationId) {
+        setCurrentConversationId(null);
+        setCurrentConversation(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+    }
+  };
+
   const handleSelectConversation = (id) => {
     setCurrentConversationId(id);
   };
@@ -249,6 +280,152 @@ function App() {
     }
   };
 
+  const handleResendMessage = async (messageIndex) => {
+    if (!currentConversationId || !currentConversation) return;
+    if (isLoading) return;
+
+    const messages = currentConversation.messages;
+    const lastUserIndex = messages
+      .map((msg, idx) => (msg.role === 'user' ? idx : -1))
+      .reduce((acc, idx) => (idx > acc ? idx : acc), -1);
+
+    if (messageIndex !== lastUserIndex) {
+      return;
+    }
+
+    const userMsg = messages[messageIndex];
+    if (!userMsg || userMsg.role !== 'user') return;
+
+    setIsLoading(true);
+
+    try {
+      // Trim conversation to the target user message and add a fresh assistant placeholder
+      const assistantMessage = {
+        role: 'assistant',
+        stage1: null,
+        stage2: null,
+        stage3: null,
+        metadata: null,
+        failed: false,
+        failedStages: {
+          stage1: false,
+          stage2: false,
+          stage3: false,
+        },
+        loading: {
+          stage1: false,
+          stage2: false,
+          stage3: false,
+        },
+      };
+
+      setCurrentConversation((prev) => ({
+        ...prev,
+        messages: [...prev.messages.slice(0, messageIndex + 1), assistantMessage],
+      }));
+
+      await api.sendMessageStream(
+        currentConversationId,
+        userMsg.content,
+        (eventType, event) => {
+          switch (eventType) {
+            case 'stage1_start':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                lastMsg.loading.stage1 = true;
+                lastMsg.expandedStage = 'stage1';
+                return { ...prev, messages: msgs };
+              });
+              break;
+            case 'stage1_complete':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                lastMsg.stage1 = event.data;
+                lastMsg.loading.stage1 = false;
+                return { ...prev, messages: msgs };
+              });
+              break;
+            case 'stage2_start':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                lastMsg.loading.stage2 = true;
+                lastMsg.expandedStage = 'stage2';
+                return { ...prev, messages: msgs };
+              });
+              break;
+            case 'stage2_complete':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                lastMsg.stage2 = event.data;
+                lastMsg.metadata = event.metadata;
+                lastMsg.loading.stage2 = false;
+                return { ...prev, messages: msgs };
+              });
+              break;
+            case 'stage3_start':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                lastMsg.loading.stage3 = true;
+                lastMsg.expandedStage = 'stage3';
+                return { ...prev, messages: msgs };
+              });
+              break;
+            case 'stage3_complete':
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                lastMsg.stage3 = event.data;
+                lastMsg.loading.stage3 = false;
+                return { ...prev, messages: msgs };
+              });
+              break;
+            case 'title_complete':
+              loadConversations();
+              break;
+            case 'complete':
+              loadConversations();
+              setIsLoading(false);
+              break;
+            case 'error':
+              console.error('Stream error:', event.message);
+              setCurrentConversation((prev) => {
+                const msgs = [...prev.messages];
+                const lastMsg = msgs[msgs.length - 1];
+                if (lastMsg && lastMsg.role === 'assistant') {
+                  lastMsg.failed = true;
+                  lastMsg.loading.stage1 = false;
+                  lastMsg.loading.stage2 = false;
+                  lastMsg.loading.stage3 = false;
+                  lastMsg.failedStages.stage1 = !lastMsg.stage1;
+                  lastMsg.failedStages.stage2 = !lastMsg.stage2;
+                  lastMsg.failedStages.stage3 = !lastMsg.stage3;
+                }
+                const userIndex = msgs.length - 2;
+                const uMsg = msgs[userIndex];
+                if (uMsg && uMsg.role === 'user') {
+                  uMsg.failed = true;
+                }
+                return { ...prev, messages: msgs };
+              });
+              setIsLoading(false);
+              break;
+            default:
+              console.log('Unknown event type:', eventType);
+          }
+        },
+        { resend_index: messageIndex }
+      );
+    } catch (error) {
+      console.error('Failed to resend message:', error);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="app">
       <Sidebar
@@ -256,12 +433,15 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onRenameConversation={handleRenameConversation}
+        onDeleteConversation={handleDeleteConversation}
       />
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
         onToggleStage={handleToggleStage}
+        onResendMessage={handleResendMessage}
       />
     </div>
   );

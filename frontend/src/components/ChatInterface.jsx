@@ -16,6 +16,7 @@ const MessagesView = memo(function MessagesView({
   expandedUserMessages,
   setExpandedUserMessages,
   isLoading,
+  onResendMessage,
 }) {
   if (!conversation) {
     return (
@@ -34,6 +35,9 @@ const MessagesView = memo(function MessagesView({
 
   const lastAssistantIndex = conversation.messages
     .map((msg, idx) => (msg.role === 'assistant' ? idx : -1))
+    .reduce((acc, idx) => (idx > acc ? idx : acc), -1);
+  const lastUserIndex = conversation.messages
+    .map((msg, idx) => (msg.role === 'user' ? idx : -1))
     .reduce((acc, idx) => (idx > acc ? idx : acc), -1);
 
   return conversation.messages.length === 0 ? (
@@ -81,6 +85,16 @@ const MessagesView = memo(function MessagesView({
                     }
                   >
                     {expandedUserMessages[index] ? 'Show less' : 'Show more'}
+                  </button>
+                )}
+                {index === lastUserIndex && (
+                  <button
+                    type="button"
+                    className="message-resend"
+                    onClick={() => onResendMessage?.(index)}
+                    disabled={isLoading}
+                  >
+                    Resend
                   </button>
                 )}
               </div>
@@ -182,6 +196,7 @@ export default function ChatInterface({
   onSendMessage,
   isLoading,
   onToggleStage,
+  onResendMessage,
 }) {
   const [input, setInput] = useState('');
   const [expandedUserMessages, setExpandedUserMessages] = useState({});
@@ -266,6 +281,7 @@ export default function ChatInterface({
           expandedUserMessages={expandedUserMessages}
           setExpandedUserMessages={setExpandedUserMessages}
           isLoading={isLoading}
+          onResendMessage={onResendMessage}
         />
         <div ref={messagesEndRef} />
       </div>

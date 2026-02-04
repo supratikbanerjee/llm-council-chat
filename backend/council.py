@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Tuple
 from .openrouter import query_models_parallel, query_model
-from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
+from .config import COUNCIL_MODELS, CHAIRMAN_MODEL, SUMMARY_MODEL
 
 
 async def stage1_collect_responses(messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
@@ -272,7 +272,7 @@ Title:"""
     messages = [{"role": "user", "content": title_prompt}]
 
     # Use gemini-2.5-flash for title generation (fast and cheap)
-    response = await query_model("nvidia/nemotron-3-nano-30b-a3b:free", messages, timeout=30.0)
+    response = await query_model(SUMMARY_MODEL, messages, timeout=30.0)
 
     if response is None:
         # Fallback to a generic title

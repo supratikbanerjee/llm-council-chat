@@ -56,6 +56,7 @@
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s;
+  position: relative;
 }
 
 .conversation-item:hover {
@@ -76,4 +77,23 @@
 .conversation-meta {
   color: #999;
   font-size: 12px;
+}
+
+.conversation-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.conversation-action {
+  background: none;
+  border: none;
+  color: #4a90e2;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.conversation-action.danger {
+  color: #d32f2f;
 }

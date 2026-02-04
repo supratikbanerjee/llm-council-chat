@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
 import json
 import asyncio
@@ -33,6 +33,7 @@ class CreateConversationRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request to send a message in a conversation."""
     content: str
+    resend_index: Optional[int] = None
 
 
 class ConversationMetadata(BaseModel):
@@ -49,6 +50,18 @@ class Conversation(BaseModel):
     created_at: str
     title: str
     messages: List[Dict[str, Any]]
+
+
+class UpdateTitleRequest(BaseModel):
+    """Request to update a conversation title."""
+    title: str
+
+
+def _last_user_index(messages: List[Dict[str, Any]]) -> Optional[int]:
+    for idx in range(len(messages) - 1, -1, -1):
+        if messages[idx].get("role") == "user":
+            return idx
+    return None
 
 
 @app.get("/")
@@ -80,6 +93,25 @@ async def get_conversation(conversation_id: str):
     return conversation
 
 
+@app.patch("/api/conversations/{conversation_id}/title")
+async def update_conversation_title(conversation_id: str, request: UpdateTitleRequest):
+    """Update a conversation title."""
+    conversation = storage.get_conversation(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    storage.update_conversation_title(conversation_id, request.title)
+    return {"status": "ok"}
+
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation."""
+    deleted = storage.delete_conversation(conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "ok"}
+
+
 @app.post("/api/conversations/{conversation_id}/message")
 async def send_message(conversation_id: str, request: SendMessageRequest):
     """
@@ -91,24 +123,37 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check if this is the first message
-    is_first_message = len(conversation["messages"]) == 0
+    resend_index = request.resend_index
+    if resend_index is not None:
+        last_user_index = _last_user_index(conversation["messages"])
+        if last_user_index is None or resend_index != last_user_index:
+            raise HTTPException(status_code=400, detail="Can only resend the most recent user message")
+        # Truncate any assistant messages after the last user message
+        if len(conversation["messages"]) > last_user_index + 1:
+            conversation["messages"] = conversation["messages"][:last_user_index + 1]
+            storage.save_conversation(conversation)
+        current_query = conversation["messages"][last_user_index]["content"]
+    else:
+        # Check if this is the first message
+        is_first_message = len(conversation["messages"]) == 0
 
-    # Add user message
-    storage.add_user_message(conversation_id, request.content)
+        # Add user message
+        storage.add_user_message(conversation_id, request.content)
 
-    # Reload to get the freshly added message
-    conversation = storage.get_conversation(conversation_id)
+        # Reload to get the freshly added message
+        conversation = storage.get_conversation(conversation_id)
 
-    # If this is the first message, generate a title
-    if is_first_message:
-        title = await generate_conversation_title(request.content)
-        storage.update_conversation_title(conversation_id, title)
+        # If this is the first message, generate a title
+        if is_first_message:
+            title = await generate_conversation_title(request.content)
+            storage.update_conversation_title(conversation_id, title)
+
+        current_query = request.content
 
     # Build context from prior turns; current user message is passed separately
     messages = await build_context_messages(
         conversation["messages"][:-1],
-        request.content
+        current_query
     )
 
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(messages)
@@ -146,20 +191,35 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
     async def event_generator():
         try:
-            # Add user message
-            storage.add_user_message(conversation_id, request.content)
+            nonlocal conversation
+            resend_index = request.resend_index
 
-            # Reload to include the freshly added message
-            conversation = storage.get_conversation(conversation_id)
+            if resend_index is not None:
+                last_user_index = _last_user_index(conversation["messages"])
+                if last_user_index is None or resend_index != last_user_index:
+                    raise HTTPException(status_code=400, detail="Can only resend the most recent user message")
+                if len(conversation["messages"]) > last_user_index + 1:
+                    conversation["messages"] = conversation["messages"][:last_user_index + 1]
+                    storage.save_conversation(conversation)
+                current_query = conversation["messages"][last_user_index]["content"]
+                title_task = None
+            else:
+                # Add user message
+                storage.add_user_message(conversation_id, request.content)
 
-            # Start title generation in parallel (don't await yet)
-            title_task = None
-            if is_first_message:
-                title_task = asyncio.create_task(generate_conversation_title(request.content))
+                # Reload to include the freshly added message
+                conversation = storage.get_conversation(conversation_id)
+
+                # Start title generation in parallel (don't await yet)
+                title_task = None
+                if is_first_message:
+                    title_task = asyncio.create_task(generate_conversation_title(request.content))
+
+                current_query = request.content
 
             messages = await build_context_messages(
                 conversation["messages"][:-1],
-                request.content
+                current_query
             )
 
             # Stage 1: Collect responses
@@ -169,13 +229,13 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
 
             # Stage 2: Collect rankings
             yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results)
+            stage2_results, label_to_model = await stage2_collect_rankings(current_query, stage1_results)
             aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
             yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
 
             # Stage 3: Synthesize final answer
             yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
+            stage3_result = await stage3_synthesize_final(current_query, stage1_results, stage2_results)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
             # Wait for title generation if it was started

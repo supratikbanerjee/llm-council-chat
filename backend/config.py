@@ -14,13 +14,14 @@ CONTEXT_TOKEN_SAFETY_MARGIN = int(os.getenv("CONTEXT_TOKEN_SAFETY_MARGIN", "256"
 
 # Council members - list of OpenRouter model identifiers
 COUNCIL_MODELS = [
-    "deepseek/deepseek-r1-distill-llama-70b",
-    "mistralai/mistral-small-3.1-24b-instruct",
+    "deepseek/deepseek-r1-distill-qwen-32b",
+    "mistralai/ministral-14b-2512",
     "upstage/solar-pro-3:free",
 ]
+#mistralai/mistral-small-3.1-24b-instruct
 
 # Chairman model - synthesizes final response
-CHAIRMAN_MODEL = "deepseek/deepseek-r1-distill-qwen-32b"
+CHAIRMAN_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
 
 # Summary model for context compression (defaults to chairman)
 SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", CHAIRMAN_MODEL)
