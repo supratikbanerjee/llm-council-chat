@@ -3,13 +3,18 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-height: 0;
   background: #ffffff;
+  min-width: 0;
 }
 
 .messages-container {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px;
+  min-width: 0;
 }
 
 .empty-state {
@@ -75,6 +80,44 @@
   line-height: 1.6;
   max-width: 80%;
   white-space: pre-wrap;
+}
+
+.message-collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.message-toggle {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: #4a90e2;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+
+.message-toggle:hover {
+  text-decoration: underline;
+}
+
+.message-failed {
+  color: #d32f2f;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.stage-failed-message {
+  color: #d32f2f;
+  font-weight: 600;
+  font-size: 13px;
+  background: #fff1f1;
+  border: 1px solid #f5c2c2;
+  padding: 10px 12px;
+  border-radius: 6px;
 }
 
 .loading-indicator {
@@ -175,4 +218,61 @@
   cursor: not-allowed;
   background: #ccc;
   border-color: #ccc;
+}
+
+/* Markdown rendering */
+.markdown-content {
+  line-height: 1.6;
+  color: #333;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-content p {
+  margin: 0 0 12px 0;
+}
+
+.markdown-content code {
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  background: #f4f4f4;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 90%;
+}
+
+.markdown-content pre code {
+  display: block;
+  padding: 12px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.markdown-content pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #e0e0e0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 20px;
 }

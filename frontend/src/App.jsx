@@ -57,6 +57,18 @@ function App() {
     setCurrentConversationId(id);
   };
 
+  const handleToggleStage = (messageIndex, stage) => {
+    setCurrentConversation((prev) => {
+      if (!prev) return prev;
+      const messages = [...prev.messages];
+      const msg = messages[messageIndex];
+      if (!msg || msg.role !== 'assistant') return prev;
+      const nextStage = msg.expandedStage === stage ? null : stage;
+      messages[messageIndex] = { ...msg, expandedStage: nextStage };
+      return { ...prev, messages };
+    });
+  };
+
   const handleSendMessage = async (content) => {
     if (!currentConversationId) return;
 
@@ -76,6 +88,12 @@ function App() {
         stage2: null,
         stage3: null,
         metadata: null,
+        failed: false,
+        failedStages: {
+          stage1: false,
+          stage2: false,
+          stage3: false,
+        },
         loading: {
           stage1: false,
           stage2: false,
@@ -84,19 +102,32 @@ function App() {
       };
 
       // Add the partial assistant message
-      setCurrentConversation((prev) => ({
-        ...prev,
-        messages: [...prev.messages, assistantMessage],
-      }));
+      setCurrentConversation((prev) => {
+        const collapsed = prev.messages.map((msg) => {
+          if (msg.role !== 'assistant') return msg;
+          return { ...msg, expandedStage: null };
+        });
+        return {
+          ...prev,
+          messages: [...collapsed, assistantMessage],
+        };
+      });
 
       // Send message with streaming
       await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
         switch (eventType) {
           case 'stage1_start':
             setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
+              const messages = prev.messages.map((msg, idx) => {
+                if (msg.role !== 'assistant') return msg;
+                return {
+                  ...msg,
+                  expandedStage: idx === prev.messages.length - 1 ? 'stage1' : null,
+                };
+              });
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage1 = true;
+              lastMsg.failedStages.stage1 = false;
               return { ...prev, messages };
             });
             break;
@@ -107,15 +138,23 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage1 = event.data;
               lastMsg.loading.stage1 = false;
+              lastMsg.failedStages.stage1 = false;
               return { ...prev, messages };
             });
             break;
 
           case 'stage2_start':
             setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
+              const messages = prev.messages.map((msg, idx) => {
+                if (msg.role !== 'assistant') return msg;
+                return {
+                  ...msg,
+                  expandedStage: idx === prev.messages.length - 1 ? 'stage2' : null,
+                };
+              });
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage2 = true;
+              lastMsg.failedStages.stage2 = false;
               return { ...prev, messages };
             });
             break;
@@ -127,15 +166,23 @@ function App() {
               lastMsg.stage2 = event.data;
               lastMsg.metadata = event.metadata;
               lastMsg.loading.stage2 = false;
+              lastMsg.failedStages.stage2 = false;
               return { ...prev, messages };
             });
             break;
 
           case 'stage3_start':
             setCurrentConversation((prev) => {
-              const messages = [...prev.messages];
+              const messages = prev.messages.map((msg, idx) => {
+                if (msg.role !== 'assistant') return msg;
+                return {
+                  ...msg,
+                  expandedStage: idx === prev.messages.length - 1 ? 'stage3' : null,
+                };
+              });
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage3 = true;
+              lastMsg.failedStages.stage3 = false;
               return { ...prev, messages };
             });
             break;
@@ -146,6 +193,7 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage3 = event.data;
               lastMsg.loading.stage3 = false;
+              lastMsg.failedStages.stage3 = false;
               return { ...prev, messages };
             });
             break;
@@ -163,6 +211,26 @@ function App() {
 
           case 'error':
             console.error('Stream error:', event.message);
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastIndex = messages.length - 1;
+              const lastMsg = messages[lastIndex];
+              if (lastMsg && lastMsg.role === 'assistant') {
+                lastMsg.failed = true;
+                lastMsg.loading.stage1 = false;
+                lastMsg.loading.stage2 = false;
+                lastMsg.loading.stage3 = false;
+                lastMsg.failedStages.stage1 = !lastMsg.stage1;
+                lastMsg.failedStages.stage2 = !lastMsg.stage2;
+                lastMsg.failedStages.stage3 = !lastMsg.stage3;
+              }
+              const userIndex = lastIndex - 1;
+              const userMsg = messages[userIndex];
+              if (userMsg && userMsg.role === 'user') {
+                userMsg.failed = true;
+              }
+              return { ...prev, messages };
+            });
             setIsLoading(false);
             break;
 
@@ -193,6 +261,7 @@ function App() {
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
+        onToggleStage={handleToggleStage}
       />
     </div>
   );

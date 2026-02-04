@@ -6,11 +6,45 @@
   border: 1px solid #e0e0e0;
 }
 
-.stage-title {
+.stage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
   margin: 0 0 16px 0;
+  text-align: left;
+  cursor: pointer;
   color: #333;
+  font: inherit;
+}
+
+.stage-toggle-icon {
+  font-size: 14px;
+  line-height: 1;
+  color: #4a90e2;
+}
+
+.stage-title {
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.stage-failed {
+  color: #d32f2f;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.stage-body {
+  display: block;
+}
+
+.stage-collapsed .stage-body {
+  display: none;
 }
 
 .tabs {
